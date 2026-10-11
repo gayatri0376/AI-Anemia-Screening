@@ -177,6 +177,8 @@ class TestScenarioSelection(unittest.TestCase):
         self.assertEqual(res1["n_after_dedup"], 1232)
         self.assertEqual(res1["n_cat_a_excluded"], 8)
         self.assertEqual(res1["task_a_n_total"], 1224)
+        self.assertEqual(res1["task_a_n_train"], 983)
+        self.assertEqual(res1["task_a_n_test"], 241)
 
         res2 = run_full_preprocessing(scenario="scenario2", verbose=False)
         self.assertEqual(res2["n_raw"], 1281)
@@ -185,6 +187,46 @@ class TestScenarioSelection(unittest.TestCase):
         self.assertEqual(res2["n_cat_a_excluded"], 8)
         self.assertEqual(res2["n_cat_b_excluded"], 21)
         self.assertEqual(res2["task_a_n_total"], 1203)
+        self.assertEqual(res2["task_a_n_train"], 962)
+        self.assertEqual(res2["task_a_n_test"], 241)
+
+
+class TestFairComparisonProtocol(unittest.TestCase):
+    """Verify that held-out test sets are 100% identical and contain zero Category B records."""
+
+    def test_identical_test_indices_across_scenarios(self):
+        """Task A and Task B test sets must be exactly identical in both scenarios."""
+        res1 = run_full_preprocessing(scenario="scenario1", verbose=False)
+        res2 = run_full_preprocessing(scenario="scenario2", verbose=False)
+
+        # Task A
+        self.assertEqual(list(res1["task_a_X_test"].index), list(res2["task_a_X_test"].index))
+        pd.testing.assert_frame_equal(res1["task_a_X_test"], res2["task_a_X_test"])
+        pd.testing.assert_series_equal(res1["task_a_y_test"], res2["task_a_y_test"])
+
+        # Task B
+        self.assertEqual(list(res1["task_b_X_test"].index), list(res2["task_b_X_test"].index))
+        pd.testing.assert_frame_equal(res1["task_b_X_test"], res2["task_b_X_test"])
+        pd.testing.assert_series_equal(res1["task_b_y_test"], res2["task_b_y_test"])
+
+    def test_zero_category_b_in_test_set(self):
+        """Test sets must contain ZERO Category B records."""
+        res1 = run_full_preprocessing(scenario="scenario1", verbose=False)
+        test_a_indices = set(res1["task_a_X_test"].index)
+        test_b_indices = set(res1["task_b_X_test"].index)
+        cat_b_set = set(CATEGORY_B_DF_INDICES)
+
+        self.assertEqual(len(test_a_indices & cat_b_set), 0)
+        self.assertEqual(len(test_b_indices & cat_b_set), 0)
+
+    def test_disjoint_train_and_test(self):
+        """In both scenarios, train and test index sets must have zero overlap."""
+        for sc in ["scenario1", "scenario2"]:
+            res = run_full_preprocessing(scenario=sc, verbose=False)
+            overlap_a = set(res["task_a_X_train"].index) & set(res["task_a_X_test"].index)
+            overlap_b = set(res["task_b_X_train"].index) & set(res["task_b_X_test"].index)
+            self.assertEqual(len(overlap_a), 0, f"Task A train/test overlap in {sc}!")
+            self.assertEqual(len(overlap_b), 0, f"Task B train/test overlap in {sc}!")
 
 
 class TestTargetMapping(unittest.TestCase):
@@ -259,5 +301,59 @@ class TestReproducibleSplittingAndPipeline(unittest.TestCase):
         self.assertFalse(hasattr(scaler, "mean_"), "Scaler in pipeline should not be fitted yet!")
 
 
+class TestNonAnemiaExclusionReconciliation(unittest.TestCase):
+    """Verify exact count tracking of non-anemia classes from 131 to 127 to 123."""
+
+    def test_non_anemia_stage_counts(self):
+        """
+        Verify exact counts of Leukemia, Leukemia w/ thrombocytopenia, Thrombocytopenia:
+        Raw: 131 (73 + 47 + 11)
+        Deduplication removes 4: 127 remain (72 + 44 + 11)
+        Category A has 0: Scenario 1 Task B exclusions = 127
+        Category B has 4: Scenario 2 Task B exclusions = 123 (69 + 44 + 10)
+        """
+        df = load_dataset()
+        raw_na = df[df[TARGET_COLUMN].isin(TASK_B_EXCLUDED_CLASSES)]
+        self.assertEqual(len(raw_na), 131)
+
+        # 4 duplicates in non-anemia
+        dup_mask = df.duplicated(keep="first")
+        na_dups = df[df[TARGET_COLUMN].isin(TASK_B_EXCLUDED_CLASSES) & dup_mask]
+        self.assertEqual(len(na_dups), 4)
+
+        # Scenario 1 exclusions for Task B
+        res1 = run_full_preprocessing(scenario="scenario1", verbose=False)
+        self.assertEqual(res1["task_b_n_excluded"], 127)
+        self.assertEqual(res1["task_b_excluded_breakdown"]["Thrombocytopenia"], 72)
+        self.assertEqual(res1["task_b_excluded_breakdown"]["Leukemia"], 44)
+        self.assertEqual(res1["task_b_excluded_breakdown"]["Leukemia with thrombocytopenia"], 11)
+
+        # Scenario 2 exclusions for Task B
+        res2 = run_full_preprocessing(scenario="scenario2", verbose=False)
+        self.assertEqual(res2["task_b_n_excluded"], 123)
+        self.assertEqual(res2["task_b_excluded_breakdown"]["Thrombocytopenia"], 69)
+        self.assertEqual(res2["task_b_excluded_breakdown"]["Leukemia"], 44)
+        self.assertEqual(res2["task_b_excluded_breakdown"]["Leukemia with thrombocytopenia"], 10)
+
+
+class TestCleaningLogStructure(unittest.TestCase):
+    """Verify cleaning log file integrity and absence of double-counting."""
+
+    def test_cleaning_log_entries(self):
+        """Verify cleaning_log.csv has 87 rows with exact step breakdown."""
+        from ml_model.src.preprocessing import REPORTS_DIR
+        log_file = REPORTS_DIR / "cleaning_log.csv"
+        self.assertTrue(log_file.exists())
+        df_log = pd.read_csv(log_file)
+        self.assertEqual(len(df_log), 87)
+
+        counts = df_log["step"].value_counts()
+        self.assertEqual(counts["deduplication"], 49)
+        self.assertEqual(counts["record_exclusion_scenario1"], 8)
+        self.assertEqual(counts["record_16_flagged_for_review"], 1)
+        self.assertEqual(counts["record_exclusion_scenario2"], 29)
+
+
 if __name__ == "__main__":
     unittest.main()
+

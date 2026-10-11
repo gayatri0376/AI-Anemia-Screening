@@ -1183,14 +1183,55 @@ def run_full_preprocessing(
     dist_after_cat_a = df_after_cat_a[TARGET_COLUMN].copy()
     dist_after_cat_b = df_clean[TARGET_COLUMN].copy() if scenario == "scenario2" else None
 
-    # Step 5: Prepare Task A
-    if verbose: print("\n[5/7] Preparing Task A (multiclass) ...")
-    X_a, y_a = prepare_task_a(df_clean, verbose=verbose)
-    X_a_train, X_a_test, y_a_train, y_a_test = split_data(X_a, y_a, verbose=verbose)
+    # Step 5: Fair Split Protocol for Task A (Shared Clean Held-out Test Set)
+    # -------------------------------------------------------------------------
+    # To ensure a strictly fair, benchmarked comparison between Scenario 1 and
+    # Scenario 2, the held-out test set is partitioned exclusively from the
+    # 1,203 clean records (0 Category A, 0 Category B).
+    # Both scenarios evaluate on the EXACT SAME 241 test records.
+    # Scenario 2 train set = 962 clean records.
+    # Scenario 1 train set = 962 clean records + 21 Category B records = 983 records.
+    if verbose: print("\n[5/7] Preparing Task A (multiclass) with Fair Split Protocol ...")
+    df_clean_pool = df_deduped[~df_deduped.index.isin(CATEGORY_A_DF_INDICES + CATEGORY_B_DF_INDICES)]
+    X_a_clean, y_a_clean = prepare_task_a(df_clean_pool, verbose=False)
+    X_a_tr_clean, X_a_test, y_a_tr_clean, y_a_test = split_data(
+        X_a_clean, y_a_clean, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=True, verbose=False
+    )
 
-    # Step 6: Prepare Task B
-    if verbose: print("\n[6/7] Preparing Task B (binary screening) ...")
-    X_b, y_b = prepare_task_b(df_clean, verbose=verbose)
+    if scenario == "scenario1":
+        # Add 21 Category B records to Scenario 1 training set only
+        cat_b_df = df_deduped[df_deduped.index.isin(CATEGORY_B_DF_INDICES)]
+        X_cat_b = cat_b_df[FEATURE_COLUMNS].copy()
+        y_cat_b = cat_b_df[TARGET_COLUMN].copy()
+        X_a_train = pd.concat([X_a_tr_clean, X_cat_b]).sort_index()
+        y_a_train = pd.concat([y_a_tr_clean, y_cat_b]).sort_index()
+    else:
+        X_a_train = X_a_tr_clean.sort_index()
+        y_a_train = y_a_tr_clean.sort_index()
+
+    # Reconstitute Task A total records for this scenario
+    X_a = pd.concat([X_a_train, X_a_test]).sort_index()
+    y_a = pd.concat([y_a_train, y_a_test]).sort_index()
+
+    if verbose:
+        print(f"  Task A test set (shared, clean): {len(X_a_test)} rows")
+        print(f"  Task A train set ({scenario})   : {len(X_a_train)} rows")
+        print(f"  Category B in test set          : 0 (guaranteed)")
+
+    # Step 6: Fair Split Protocol for Task B (Shared Clean Held-out Test Set)
+    # -------------------------------------------------------------------------
+    # Candidate clean pool has 1,080 records (non-anemia excluded).
+    # Test set = exactly 216 clean records (identical for S1 and S2).
+    # Scenario 2 train set = 864 clean records.
+    # Scenario 1 train set = 864 clean records + 17 eligible Category B records = 881 records.
+    if verbose: print("\n[6/7] Preparing Task B (binary screening) with Fair Split Protocol ...")
+    df_clean_b_pool = df_clean_pool[df_clean_pool[TARGET_COLUMN].isin(ANEMIA_CLASSES + [HEALTHY_CLASS])]
+    X_b_clean, y_b_clean = prepare_task_b(df_clean_b_pool, verbose=False)
+    X_b_tr_clean, X_b_test, y_b_tr_clean, y_b_test = split_data(
+        X_b_clean, y_b_clean, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=True, verbose=False
+    )
+
+    # Breakdown of excluded classes for this scenario
     task_b_n_excluded = (
         df_clean[TARGET_COLUMN].isin(TASK_B_EXCLUDED_CLASSES).sum()
     )
@@ -1198,7 +1239,24 @@ def run_full_preprocessing(
         cls: int((df_clean[TARGET_COLUMN] == cls).sum())
         for cls in TASK_B_EXCLUDED_CLASSES
     }
-    X_b_train, X_b_test, y_b_train, y_b_test = split_data(X_b, y_b, verbose=verbose)
+
+    if scenario == "scenario1":
+        # Cat B records eligible for Task B (exclude non-anemia disorders)
+        cat_b_b_df = cat_b_df[cat_b_df[TARGET_COLUMN].isin(ANEMIA_CLASSES + [HEALTHY_CLASS])]
+        X_cat_b_b, y_cat_b_b = prepare_task_b(cat_b_b_df, verbose=False)
+        X_b_train = pd.concat([X_b_tr_clean, X_cat_b_b]).sort_index()
+        y_b_train = pd.concat([y_b_tr_clean, y_cat_b_b]).sort_index()
+    else:
+        X_b_train = X_b_tr_clean.sort_index()
+        y_b_train = y_b_tr_clean.sort_index()
+
+    X_b = pd.concat([X_b_train, X_b_test]).sort_index()
+    y_b = pd.concat([y_b_train, y_b_test]).sort_index()
+
+    if verbose:
+        print(f"  Task B test set (shared, clean): {len(X_b_test)} rows")
+        print(f"  Task B train set ({scenario})   : {len(X_b_train)} rows")
+        print(f"  Non-anemia classes excluded     : {task_b_n_excluded} rows")
 
     # Step 7: Build pipeline (unfitted)
     if verbose: print("\n[7/7] Building feature preprocessing pipeline (unfitted) ...")
