@@ -297,7 +297,8 @@ def predict_diagnosis(
         "rare_class_note": (
             "Note: Certain rare hematologic subtypes (e.g. Macrocytic anemia, "
             "Leukemia with thrombocytopenia) have small sample representations in the dataset. "
-            "Probabilities are model-calibrated scores and must not be interpreted as absolute clinical risk."
+            "Output probabilities represent uncalibrated model scores interpreted as probabilities "
+            "and must not be interpreted as absolute clinical risk."
         ),
         "clinical_disclaimer": CLINICAL_DISCLAIMER,
     }

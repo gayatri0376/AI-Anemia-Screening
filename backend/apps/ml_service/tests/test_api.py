@@ -217,6 +217,8 @@ class DiagnosisEndpointTests(APITestCase):
         self.assertAlmostEqual(sum(data["class_probabilities"].values()), 1.0, places=1)
         self.assertIn(CLINICAL_DISCLAIMER, data["clinical_disclaimer"])
         self.assertIn("rare_class_note", data)
+        self.assertIn("uncalibrated model scores interpreted as probabilities", data["rare_class_note"])
+        self.assertNotIn("model-calibrated scores", data["rare_class_note"])
 
     def test_valid_diagnosis_anemia(self):
         payload = dict(ANEMIA_CBC_DATA)
