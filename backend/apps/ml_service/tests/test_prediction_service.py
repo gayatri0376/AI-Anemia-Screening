@@ -172,17 +172,54 @@ class TestPredictionServiceTaskB(unittest.TestCase):
         self.assertGreater(res["probability_anemia"], 0.5)
 
     def test_threshold_application(self):
-        """Verify that the exact threshold from metadata is recorded and applied."""
-        meta = get_model_metadata()
-        expected_th = meta["models"]["task_b_scenario2_logistic_regression"]["tuned_threshold"]
-        res = predict_anemia_screening(HEALTHY_CBC_SAMPLE, scenario="scenario_2", model_name="logistic_regression")
-        self.assertAlmostEqual(res["applied_threshold"], expected_th, places=4)
+        """Verify that the exact threshold from metadata is recorded and applied for all 6 Task B combinations."""
+        # Expected authoritative thresholds established in Phase 5 benchmark artifacts
+        expected_thresholds = {
+            ("scenario1", "logistic_regression"): 0.39,
+            ("scenario1", "decision_tree"): 0.10,
+            ("scenario1", "random_forest"): 0.41,
+            ("scenario2", "logistic_regression"): 0.34,
+            ("scenario2", "decision_tree"): 0.10,
+            ("scenario2", "random_forest"): 0.37,
+        }
 
-    def test_scenario_1_and_2_execution(self):
-        """Both scenario_1 and scenario_2 should execute cleanly."""
-        for sc in ["scenario_1", "scenario_2", "scenario1", "scenario2"]:
-            res = predict_anemia_screening(HEALTHY_CBC_SAMPLE, scenario=sc, model_name="random_forest")
-            self.assertIn(res["predicted_class"], [0, 1])
+        meta = get_model_metadata()
+
+        for (scenario, model_name), expected_th in expected_thresholds.items():
+            model_key = f"task_b_{scenario}_{model_name}"
+            # Verify threshold stored in metadata matches authoritative value
+            meta_th = meta["models"][model_key]["tuned_threshold"]
+            self.assertAlmostEqual(
+                meta_th,
+                expected_th,
+                places=3,
+                msg=f"Metadata threshold mismatch for {model_key}",
+            )
+
+            # Verify prediction service retrieves and applies this exact threshold
+            res = predict_anemia_screening(
+                HEALTHY_CBC_SAMPLE,
+                scenario=scenario,
+                model_name=model_name,
+            )
+            self.assertAlmostEqual(
+                res["applied_threshold"],
+                expected_th,
+                places=3,
+                msg=f"Applied threshold mismatch in prediction result for {model_key}",
+            )
+
+    def test_threshold_decision_boundary(self):
+        """Verify that probability >= threshold classifies as 1 (Anemia) and < threshold classifies as 0 (Healthy)."""
+        # Test with Logistic Regression on Scenario 1 (threshold 0.39) and Scenario 2 (threshold 0.34)
+        for sc in ["scenario_1", "scenario_2"]:
+            res = predict_anemia_screening(HEALTHY_CBC_SAMPLE, scenario=sc, model_name="logistic_regression")
+            prob = res["probability_anemia"]
+            thresh = res["applied_threshold"]
+            if prob >= thresh:
+                self.assertEqual(res["predicted_class"], 1)
+            else:
+                self.assertEqual(res["predicted_class"], 0)
 
 
 class TestPredictionServiceTaskA(unittest.TestCase):
