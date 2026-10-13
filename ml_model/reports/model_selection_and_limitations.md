@@ -4,7 +4,7 @@
 **Module:** Module 2 — Machine Learning and Model Evaluation  
 **Date:** October 13, 2026  
 **Document Status:** Formal Documentation & Architectural Review Only  
-**System Status:** **INCOMPLETE** — Backend Django REST API and React Frontend are not completed; `ml_model/src/predict.py` is currently an unpopulated stub. Models are strictly provisional and have **not** been approved or validated for real-world clinical use.
+**System Status:** **ML Module Complete, Integration Pending** — `ml_model/src/predict.py` is fully implemented (620 lines, 51 tests passing). The Django REST API backend and React frontend are **not yet implemented**. Models are strictly provisional research baselines and have **not** been approved or validated for real-world clinical use.
 
 ---
 
