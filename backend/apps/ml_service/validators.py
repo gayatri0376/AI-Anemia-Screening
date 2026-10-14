@@ -38,8 +38,8 @@ EXPECTED_FEATURES: List[str] = [
 # They do NOT define diagnostic reference intervals.
 PHYSICAL_SANITY_BOUNDS: Dict[str, Tuple[float, float, str, str]] = {
     "WBC": (
-        0.1, 300.0, "x10^3/uL",
-        "White blood cell count. Values below 0.1 or above 300 indicate profound instrument error."
+        0.1, 500.0, "x10^3/uL",
+        "White blood cell count. Values below 0.1 or above 500 indicate profound instrument error."
     ),
     "LYMp": (
         0.0, 100.0, "%",
@@ -50,11 +50,11 @@ PHYSICAL_SANITY_BOUNDS: Dict[str, Tuple[float, float, str, str]] = {
         "Neutrophil differential percentage. Cannot be negative or exceed 100%."
     ),
     "LYMn": (
-        0.0, 150.0, "x10^3/uL",
+        0.0, 100.0, "x10^3/uL",
         "Absolute lymphocyte count. Cannot be negative."
     ),
     "NEUTn": (
-        0.0, 250.0, "x10^3/uL",
+        0.0, 100.0, "x10^3/uL",
         "Absolute neutrophil count. Cannot be negative."
     ),
     "RBC": (
@@ -62,19 +62,19 @@ PHYSICAL_SANITY_BOUNDS: Dict[str, Tuple[float, float, str, str]] = {
         "Red blood cell count. Physiological maximum rarely exceeds 10; values >15 are unit errors."
     ),
     "HGB": (
-        0.0, 30.0, "g/dL",
+        0.5, 30.0, "g/dL",
         "Hemoglobin concentration. Cannot be negative; values >30 are physically impossible."
     ),
     "HCT": (
-        0.0, 100.0, "%",
+        1.0, 100.0, "%",
         "Hematocrit percentage. Cannot be negative or exceed 100%."
     ),
     "MCV": (
-        20.0, 200.0, "fL",
-        "Mean corpuscular volume. Erythrocyte volume cannot be negative; clinical macrocytosis <180."
+        10.0, 250.0, "fL",
+        "Mean corpuscular volume. Erythrocyte volume cannot be negative; clinical macrocytosis <250."
     ),
     "MCH": (
-        5.0, 100.0, "pg",
+        5.0, 150.0, "pg",
         "Mean corpuscular hemoglobin. Physiological upper clinical limit is ~45-50 pg."
     ),
     "MCHC": (
@@ -82,7 +82,7 @@ PHYSICAL_SANITY_BOUNDS: Dict[str, Tuple[float, float, str, str]] = {
         "Mean corpuscular hemoglobin concentration. Hyperchromia >40 is rare; >50 is physiologically implausible."
     ),
     "PLT": (
-        1.0, 2500.0, "x10^3/uL",
+        1.0, 3000.0, "x10^3/uL",
         "Platelet count. Cannot be negative; extreme thrombocytosis rarely exceeds 2000."
     ),
     "PDW": (
@@ -90,8 +90,8 @@ PHYSICAL_SANITY_BOUNDS: Dict[str, Tuple[float, float, str, str]] = {
         "Platelet distribution width. Width cannot be negative; clinical PDW >40 indicates instrument artifact."
     ),
     "PCT": (
-        0.0, 5.0, "%",
-        "Plateletcrit percentage. Plateletcrit >5% is extreme; typical normal is 0.1-0.5%."
+        0.0, 10.0, "%",
+        "Plateletcrit percentage. Plateletcrit >5% is extreme; typical normal is 0.1-0.5%, ceiling 10%."
     ),
 }
 

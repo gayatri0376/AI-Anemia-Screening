@@ -40,6 +40,7 @@ ARTIFACTS SAVED:
   • ml_model/reports/roc_pr_curves_task_b.png
 """
 
+import sys
 import json
 import joblib
 import numpy as np
@@ -66,9 +67,6 @@ from sklearn.metrics import (
     roc_curve,
     precision_recall_curve,
 )
-
-import sys
-from pathlib import Path
 
 # Add project root to sys.path so ml_model is importable
 THIS_FILE = Path(__file__).resolve()
